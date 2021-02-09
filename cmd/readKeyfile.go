@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh/terminal"
 	"os"
-	"github.com/goethkey/goethkey"
+	"github.com/san-lab/secretsplitcli/goethkey"
 	"bufio"
 	"encoding/hex"
 	"strings"

@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/goethkey/cmd"
+import "github.com/san-lab/secretsplitcli/cmd"
 
 func main() {
 	cmd.Execute()
