@@ -116,7 +116,7 @@ func handleScrypt(kf *goethkey.Keyfile) (key []byte, macok bool) {
 	//verify mac
 	mymac :=  hex.EncodeToString(goethkey.Keccak256(append(key[16:32],citx...)))
 	macok = (mymac == kf.Crypto.Mac)
-	fmt.Printf("\nMAC verification: %v\n", macok)
+	fmt.Printf("\nMAC verification: %v\n\n", macok)
 
 	return key, macok
 }
