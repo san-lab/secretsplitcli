@@ -47,6 +47,11 @@ var kdfNew string
 var ethkeyStr string
 
 func generateKeySplit(cmd *cobra.Command, args []string) {
+	if len(args) != 3 {
+		fmt.Println("incorrect number of arguments (totalShares, minShares, baseFilename)")
+		return
+	}
+
 	numShares64,_ := strconv.ParseInt(args[0], 10, 64)
 	minShares64,_ := strconv.ParseInt(args[1], 10, 64)
 
