@@ -16,26 +16,26 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/spf13/cobra"
-	"time"
-	"github.com/san-lab/secretsplitcli/goethkey"
-	"github.com/SSSaaS/sssa-golang"
-	"fmt"
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"github.com/SSSaaS/sssa-golang"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/google/uuid"
-	"encoding/json"
+	"github.com/san-lab/secretsplitcli/goethkey"
+	"github.com/spf13/cobra"
 	"io/ioutil"
+	"math/big"
 	"strconv"
 )
 
 // generateKeyfileCmd represents the generateKeyfile command
 var generateKeySplitCmd = &cobra.Command{
-	Use:   "generateKeySplit totalShares MinShares baseFilename",
+	Use:   "generateKeySplit totalShares MinShares baseFilename privatekey",
 	Short: "Generates shamir secret shares of a private key",
 	Long: `Generates shamir secret shares of a private key. Interactively asks for passwords (do not forget your choice!).`,
 	Run: generateKeySplit,
@@ -45,35 +45,49 @@ var numShares, minShares int
 var genFilenameBase string
 var kdfNew string
 var ethkeyStr string
+var ethkey []byte
+
+var DefaultPrimeStr = "115792089237316195423570985008687907853269984665640564039457584007913129639747"
+var defaultPrime, _ = big.NewInt(0).SetString(DefaultPrimeStr, 10)
 
 func generateKeySplit(cmd *cobra.Command, args []string) {
-	if len(args) != 3 {
+	if len(args) < 3 || len(args) > 4  {
 		fmt.Println("incorrect number of arguments (totalShares, minShares, baseFilename)")
 		return
+	} else if len(args) == 3 {
+		//Generate the Koblitz private key
+		ethkey = make([]byte, 32)
+		rand.Read(ethkey)
+		fmt.Printf("Private key1: \t%s\n", hex.EncodeToString(ethkey))
+		ethkeyStr = string(ethkey)
+	} else {
+		ethkey, _ := hex.DecodeString(args[3])
+		ethkeyStr = string(ethkey)
 	}
 
+	genFilenameBase = args[2]
 	numShares64,_ := strconv.ParseInt(args[0], 10, 64)
 	minShares64,_ := strconv.ParseInt(args[1], 10, 64)
 
 	numShares = int(numShares64)
 	minShares = int(minShares64)
 
-	if len(args) == 3 {
-		genFilenameBase = args[2]
-	} else {
-		genFilenameBase = time.Now().Format(time.RFC3339) + ".json"
-	}
-
-	//for len(pass) <
-
-	//Generate the Koblitz private key
-	ethkey := make([]byte, 32)
-	rand.Read(ethkey)
-	fmt.Printf("Private key: \t%s\n", hex.EncodeToString(ethkey))
-	ethkeyStr = string(ethkey)
-
 	shares, errShares := sssa.Create(minShares, numShares, ethkeyStr)
 	if errShares != nil {fmt.Println(errShares); return}
+
+
+	///////////
+	//secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
+	//T := 2
+	//poly := share.NewPriPoly( pairing.NewSuiteBn256().G1(), T, secretScalar, pairing.NewSuiteBn256().RandomStream())
+
+	//sharesN := poly.Shares(4)
+
+	//rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G1(), sharesN, T, T)
+	//b, _ := rec.MarshalBinary()
+	//retrievedKey := hex.EncodeToString(b)
+	//fmt.Printf("Private key: \t%s\n", retrievedKey)
+	////////
 
 	for i:= 0; i < len(shares); i++ {
 		shareBytes := []byte(shares[i])
@@ -86,8 +100,10 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		var err error
 		for true {
 			pass, err = readPassword("Password for the keyfile:")
+			fmt.Print("\n")
 			if err != nil {fmt.Println(err); return}
 			p2, err = readPassword("Repeat password:")
+			fmt.Print("\n")
 			if err != nil {fmt.Println(err); return}
 			if len(pass) < 6 {fmt.Println("Password too short, try again\n"); continue}
 			if bytes.Equal(pass,p2) {break}
@@ -143,7 +159,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 		x, y := btcec.S256().ScalarBaseMult(shareBytes)
 		pubkeyeth := append(x.Bytes(), y.Bytes()...)
-		fmt.Printf("Public key: %s\n", hex.EncodeToString(pubkeyeth))
+		//fmt.Printf("Public key: %s\n", hex.EncodeToString(pubkeyeth))
 		kecc := goethkey.Keccak256(pubkeyeth)
 		addr := kecc[12:]
 
@@ -158,6 +174,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		if err != nil {fmt.Println(err); return}
 		ioutil.WriteFile(genFilenameBase + strconv.Itoa(i), bytes, 0644)
 	}
+	fmt.Println("Private key correctly split and stored!!")
 }
 
 func init() {

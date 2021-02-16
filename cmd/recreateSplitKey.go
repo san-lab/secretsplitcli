@@ -16,11 +16,13 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/SSSaaS/sssa-golang"
+	"math/big"
 	"strconv"
 
 	"github.com/san-lab/secretsplitcli/goethkey"
@@ -70,9 +72,18 @@ func reacreateSplitKey(cmd *cobra.Command, args []string) {
 		if errDec != nil { fmt.Println(errDec); return}
 		shares[i] = string(share)
 	}
-	privkey, _ := sssa.Combine(shares)
-	privKeyBytes := []byte(privkey)
-	fmt.Printf("Private key: \t%s\n", hex.EncodeToString(privKeyBytes))
+
+	var x []*big.Int
+	var y []*big.Int
+	for j:= 0; j < len(shares); j++ {
+		x = append(x, fromBase64(shares[j][0:44]))
+		y = append(y, fromBase64(shares[j][44:]))
+		fmt.Printf("Share %d\n", j)
+		fmt.Printf("X: %d\n", x[j])
+		fmt.Printf("Y: %d\n", y[j])
+	}
+
+	recreate(x,y)
 }
 
 //This assumes that the MAC verification has been OK
@@ -114,4 +125,85 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// readKeyfileCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func fromBase64(number string) *big.Int {
+	bytedata, err := base64.URLEncoding.DecodeString(number)
+	if err != nil {
+		return big.NewInt(-1)
+	}
+
+	hexdata := hex.EncodeToString(bytedata)
+	result, ok := big.NewInt(0).SetString(hexdata, 16)
+	if ok == false {
+		return big.NewInt(-1)
+	}
+
+	return result
+}
+
+/**
+ * Converts an array of big.Ints to the original byte array, removing any
+ * least significant nulls
+**/
+func mergeIntToByte(secret []*big.Int) []byte {
+	var hex_data = ""
+	for i := range secret {
+		tmp := fmt.Sprintf("%x", secret[i])
+		hex_data += strings.Join([]string{strings.Repeat("0", (64 - len(tmp))), tmp}, "")
+	}
+
+	result, _ := hex.DecodeString(hex_data)
+	result = bytes.TrimRight(result, "\x00")
+
+	return result
+}
+
+func modInverse(number *big.Int) *big.Int {
+	copy := big.NewInt(0).Set(number)
+	copy = copy.Mod(copy, defaultPrime)
+	pcopy := big.NewInt(0).Set(defaultPrime)
+	x := big.NewInt(0)
+	y := big.NewInt(0)
+
+	copy.GCD(x, y, pcopy, copy)
+
+	result := big.NewInt(0).Set(defaultPrime)
+
+	result = result.Add(result, y)
+	result = result.Mod(result, defaultPrime)
+	return result
+}
+
+func recreate(x []*big.Int, y []*big.Int) {
+	zero := big.NewInt(0)
+	totSum := big.NewInt(0)
+	summand := big.NewInt(0)
+	for i := 0; i < len(x); i++ {
+		numerator := big.NewInt(1)
+		denominator := big.NewInt(1)
+		for j := 0; j < len(x); j++{
+			if j != i {
+				negative := big.NewInt(0)
+				negative.Sub(zero, x[j])
+				numerator.Mul(numerator, negative)
+				numerator.Mod(numerator, defaultPrime)
+
+				denominator = big.NewInt(0)
+				denominator.Sub(x[i], x[j])
+				denominator.Mod(denominator, defaultPrime)
+			}
+		}
+		summand = big.NewInt(0).Set(y[i])
+		summand.Mul(summand,numerator)
+		summand.Mul(summand, modInverse(denominator))
+
+		totSum.Add(totSum, summand)
+		totSum.Mod(totSum, defaultPrime)
+	}
+	var totSumArr []*big.Int
+	totSumArr = append(totSumArr,totSum)
+	resultEnd := string(mergeIntToByte(totSumArr))
+	resultEndBytes := []byte(resultEnd)
+	fmt.Printf("Private key: \t%s\n", hex.EncodeToString(resultEndBytes))
 }
