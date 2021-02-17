@@ -61,11 +61,12 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		//Generate the Koblitz private key
 		ethkey = make([]byte, 32)
 		rand.Read(ethkey)
-		fmt.Printf("Private key1: \t%s\n", hex.EncodeToString(ethkey))
-		ethkeyStr = string(ethkey)
+		fmt.Printf("Private key 1: %s\n", hex.EncodeToString(ethkey))
+		fmt.Printf("Byte array 1: [% x]\n", ethkey)
 	} else {
-		ethkey, _ := hex.DecodeString(args[3])
-		ethkeyStr = string(ethkey)
+		ethkey, _ = hex.DecodeString(args[3])
+		fmt.Printf("Private key 2: %s\n", hex.EncodeToString(ethkey))
+		fmt.Printf("Byte array 2: [% x]\n", ethkey)
 	}
 
 	genFilenameBase = args[2]
@@ -75,38 +76,18 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 	numShares = int(numShares64)
 	minShares = int(minShares64)
 
-	//shares, errShares := sssa.Create(minShares, numShares, ethkeyStr)
-	//if errShares != nil {fmt.Println(errShares); return}
-
-
-	///////////
 	secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
+	fmt.Println("Secret scalar", secretScalar)
+	fmt.Printf("Bytes outside if: [% x]\n", ethkey)
 	poly := share.NewPriPoly( pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
 	sharesN := poly.Shares(numShares)
 
 	var arrayShareBytes [][]byte
-	var sharesOut []*share.PriShare
-	for i, s := range sharesN {
-		fmt.Println(i)
+	for _, s := range sharesN {
 		var shareTemp = sharePrishare{s.I, s.V}
-		b, e := shareTemp.MarshalJSON()
+		b, _ := shareTemp.MarshalJSON()
 		arrayShareBytes = append(arrayShareBytes,b)
-		s2 := new(sharePrishare)
-		fmt.Println(e,"JSON pre", s)
-		e = s2.UnmarshalJSON(b)
-		fmt.Println(e, "JSON post", *s2)
-		sharesOut = append(sharesOut, &share.PriShare{s2.I, s2.V})
 	}
-
-	fmt.Println("JSON", sharesN)
-	fmt.Println("JSON", sharesOut)
-
-
-	rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G1(), sharesOut, minShares, minShares)
-	b, _ := rec.MarshalBinary()
-	retrievedKey := hex.EncodeToString(b)
-	fmt.Printf("TESTTTTTT: \t%s\n", retrievedKey)
-	////////
 
 	for i:= 0; i < len(arrayShareBytes); i++ {
 		shareBytes := arrayShareBytes[i]
@@ -224,7 +205,6 @@ func (ps *sharePrishare) Serialize() (buf []byte) {
 		return
 	}
 	buf = append(buf, temp_buf2...)
-	fmt.Println("BUFF SERIALIZE", buf)
 	return
 }
 
@@ -232,7 +212,6 @@ func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
 	if len(btes) != 34 {
 		return nil, fmt.Errorf("Wrong buffer length", len(btes))
 	}
-	fmt.Println("BUFF DESERIALIZE", btes)
 	ps.I = int(btes[0])
 	ps.V = pairing.NewSuiteBn256().G1().Scalar()
 	ps.V.UnmarshalBinary(btes[2:])

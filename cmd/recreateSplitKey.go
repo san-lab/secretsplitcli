@@ -72,15 +72,11 @@ func reacreateSplitKey(cmd *cobra.Command, args []string) {
 	}
 
 	var sharesOut []*share.PriShare
-	for i, b := range arrayShareBytes {
-		fmt.Println(i)
+	for _, b := range arrayShareBytes {
 		s2 := new(sharePrishare)
-		e := s2.UnmarshalJSON(b)
-		fmt.Println(e, "JSON post", *s2)
+		s2.UnmarshalJSON(b)
 		sharesOut = append(sharesOut, &share.PriShare{s2.I, s2.V})
 	}
-
-	fmt.Println("JSON", sharesOut)
 
 	rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G1(), sharesOut, minShares, minShares)
 	b, _ := rec.MarshalBinary()
