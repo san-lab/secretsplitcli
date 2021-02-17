@@ -20,18 +20,21 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/SSSaaS/sssa-golang"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/google/uuid"
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
+	"go.dedis.ch/kyber/v3/pairing"
+	"go.dedis.ch/kyber/v3/share"
 	"io/ioutil"
 	"math/big"
 	"strconv"
 )
+type sharePrishare share.PriShare
 
 // generateKeyfileCmd represents the generateKeyfile command
 var generateKeySplitCmd = &cobra.Command{
@@ -72,25 +75,41 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 	numShares = int(numShares64)
 	minShares = int(minShares64)
 
-	shares, errShares := sssa.Create(minShares, numShares, ethkeyStr)
-	if errShares != nil {fmt.Println(errShares); return}
+	//shares, errShares := sssa.Create(minShares, numShares, ethkeyStr)
+	//if errShares != nil {fmt.Println(errShares); return}
 
 
 	///////////
-	//secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
-	//T := 2
-	//poly := share.NewPriPoly( pairing.NewSuiteBn256().G1(), T, secretScalar, pairing.NewSuiteBn256().RandomStream())
+	secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
+	poly := share.NewPriPoly( pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
+	sharesN := poly.Shares(numShares)
 
-	//sharesN := poly.Shares(4)
+	var arrayShareBytes [][]byte
+	var sharesOut []*share.PriShare
+	for i, s := range sharesN {
+		fmt.Println(i)
+		var shareTemp = sharePrishare{s.I, s.V}
+		b, e := shareTemp.MarshalJSON()
+		arrayShareBytes = append(arrayShareBytes,b)
+		s2 := new(sharePrishare)
+		fmt.Println(e,"JSON pre", s)
+		e = s2.UnmarshalJSON(b)
+		fmt.Println(e, "JSON post", *s2)
+		sharesOut = append(sharesOut, &share.PriShare{s2.I, s2.V})
+	}
 
-	//rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G1(), sharesN, T, T)
-	//b, _ := rec.MarshalBinary()
-	//retrievedKey := hex.EncodeToString(b)
-	//fmt.Printf("Private key: \t%s\n", retrievedKey)
+	fmt.Println("JSON", sharesN)
+	fmt.Println("JSON", sharesOut)
+
+
+	rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G1(), sharesOut, minShares, minShares)
+	b, _ := rec.MarshalBinary()
+	retrievedKey := hex.EncodeToString(b)
+	fmt.Printf("TESTTTTTT: \t%s\n", retrievedKey)
 	////////
 
-	for i:= 0; i < len(shares); i++ {
-		shareBytes := []byte(shares[i])
+	for i:= 0; i < len(arrayShareBytes); i++ {
+		shareBytes := arrayShareBytes[i]
 		fmt.Printf("Size: \t%d\n", len(shareBytes))
 
 		kf := goethkey.Keyfile{}
@@ -139,7 +158,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 		//Letsencrypt
 		iv := make([]byte, 16)
-		ciphertext := make([]byte, 88)
+		ciphertext := make([]byte, 68)
 		rand.Read(iv)
 
 		block, err := aes.NewCipher(key[0:16])
@@ -190,4 +209,46 @@ func init() {
 	// is called directly, e.g.:
 	// generateKeyfileCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	generateKeySplitCmd.Flags().StringVarP(&kdfNew, "kdf", "", "scrypt", "--kdf preferredKDF")
+}
+
+func (ps *sharePrishare) Serialize() (buf []byte) {
+
+	uint_I := uint16(ps.I)
+	temp_buf1 := []byte{0,0}
+	binary.LittleEndian.PutUint16(temp_buf1, uint_I)
+	buf = append(buf, temp_buf1...)
+
+	temp_buf2, err := ps.V.MarshalBinary()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	buf = append(buf, temp_buf2...)
+	fmt.Println("BUFF SERIALIZE", buf)
+	return
+}
+
+func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
+	if len(btes) != 34 {
+		return nil, fmt.Errorf("Wrong buffer length", len(btes))
+	}
+	fmt.Println("BUFF DESERIALIZE", btes)
+	ps.I = int(btes[0])
+	ps.V = pairing.NewSuiteBn256().G1().Scalar()
+	ps.V.UnmarshalBinary(btes[2:])
+	return ps, nil
+}
+
+func (ps *sharePrishare) MarshalJSON() ([]byte, error) {
+	bt := ps.Serialize()
+	return []byte(hex.EncodeToString(bt)), nil
+}
+
+func (ps *sharePrishare) UnmarshalJSON(in []byte) error {
+	ser, err := hex.DecodeString(string(in))
+	if err != nil {
+		return err
+	}
+	ps.Deserialize(ser)
+	return nil
 }
