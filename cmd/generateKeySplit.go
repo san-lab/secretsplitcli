@@ -28,6 +28,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
+	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/kyber/v3/pairing"
 	"go.dedis.ch/kyber/v3/share"
 	"io/ioutil"
@@ -54,32 +55,36 @@ var DefaultPrimeStr = "115792089237316195423570985008687907853269984665640564039
 var defaultPrime, _ = big.NewInt(0).SetString(DefaultPrimeStr, 10)
 
 func generateKeySplit(cmd *cobra.Command, args []string) {
+	var poly *share.PriPoly
 	if len(args) < 3 || len(args) > 4  {
 		fmt.Println("incorrect number of arguments (totalShares, minShares, baseFilename)")
 		return
 	} else if len(args) == 3 {
-		//Generate the Koblitz private key
-		ethkey = make([]byte, 32)
-		rand.Read(ethkey)
-		fmt.Printf("Private key 1: %s\n", hex.EncodeToString(ethkey))
-		fmt.Printf("Byte array 1: [% x]\n", ethkey)
+		genFilenameBase = args[2]
+		numShares64,_ := strconv.ParseInt(args[0], 10, 64)
+		minShares64,_ := strconv.ParseInt(args[1], 10, 64)
+
+		numShares = int(numShares64)
+		minShares = int(minShares64)
+
+		suite := suites.MustFind("bn256.G1")
+		secretScalar := pairing.NewSuiteBn256().G1().Scalar().Pick(suite.RandomStream())
+		poly = share.NewPriPoly( pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
+		fmt.Println("Secret scalar", secretScalar)
 	} else {
+		genFilenameBase = args[2]
+		numShares64,_ := strconv.ParseInt(args[0], 10, 64)
+		minShares64,_ := strconv.ParseInt(args[1], 10, 64)
+
+		numShares = int(numShares64)
+		minShares = int(minShares64)
+
 		ethkey, _ = hex.DecodeString(args[3])
-		fmt.Printf("Private key 2: %s\n", hex.EncodeToString(ethkey))
-		fmt.Printf("Byte array 2: [% x]\n", ethkey)
+		secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
+		poly = share.NewPriPoly( pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
+		fmt.Println("Secret scalar", secretScalar)
 	}
 
-	genFilenameBase = args[2]
-	numShares64,_ := strconv.ParseInt(args[0], 10, 64)
-	minShares64,_ := strconv.ParseInt(args[1], 10, 64)
-
-	numShares = int(numShares64)
-	minShares = int(minShares64)
-
-	secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
-	fmt.Println("Secret scalar", secretScalar)
-	fmt.Printf("Bytes outside if: [% x]\n", ethkey)
-	poly := share.NewPriPoly( pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
 	sharesN := poly.Shares(numShares)
 
 	var arrayShareBytes [][]byte
@@ -91,8 +96,6 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 	for i:= 0; i < len(arrayShareBytes); i++ {
 		shareBytes := arrayShareBytes[i]
-		fmt.Printf("Size: \t%d\n", len(shareBytes))
-
 		kf := goethkey.Keyfile{}
 
 		kf.Crypto.Kdf = kdfNew
