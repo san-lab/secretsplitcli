@@ -17,22 +17,23 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/spf13/viper"
 	"github.com/san-lab/secretsplitcli/goethkey"
+	"github.com/spf13/viper"
 )
 
 var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "goethkey",
+	Use:   "secretsplitcli",
 	Short: "Yet another tool to manage Ethereum keyfiles, this one written in Go...",
 	Long: `Yet another tool to manage Ethereum keyfiles, this one written in Go...
-...because the only other tools I have been able to find are JS/Python (so interpreted). `,
+...but this one manage splitting the key by Shamir's Secret. `,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },

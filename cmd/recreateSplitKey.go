@@ -20,23 +20,24 @@ import (
 	"crypto/cipher"
 	"encoding/hex"
 	"fmt"
-	"go.dedis.ch/kyber/v3/pairing"
-	"go.dedis.ch/kyber/v3/share"
 	"strconv"
+	"strings"
+
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
-	"strings"
+	"go.dedis.ch/kyber/v3/pairing"
+	"go.dedis.ch/kyber/v3/share"
 )
 
 // readKeyfileCmd represents the readKeyfile command
 var recreateSplitKeyCmd = &cobra.Command{
-	Use:   "reacreateSplitKey",
+	Use:   "recreateSplitKey",
 	Short: "Read an Ethereum key file",
 	Long:  `A longer description will follow soon.`,
-	Run:   reacreateSplitKey,
+	Run:   recreateSplitKey,
 }
 
-func reacreateSplitKey(cmd *cobra.Command, args []string) {
+func recreateSplitKey(cmd *cobra.Command, args []string) {
 	var numShares int
 	fmt.Print("Enter the number of shares to be used: ")
 	fmt.Scanf("%d", &numShares)
@@ -44,13 +45,16 @@ func reacreateSplitKey(cmd *cobra.Command, args []string) {
 
 	var arrayShareBytes [][]byte
 
-	for i := 0; i < numShares ; i++ {
+	for i := 0; i < numShares; i++ {
 		var filename string
 		fmt.Print("Enter the name of share " + strconv.Itoa(i+1) + ": ")
 		fmt.Scanf("%s", &filename)
 
 		keyfile, err := goethkey.ReadKeyfile(filename)
-		if err != nil { fmt.Println(err); return}
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 
 		//TODO Handle the unencrypted kyefiles
 
@@ -60,14 +64,19 @@ func reacreateSplitKey(cmd *cobra.Command, args []string) {
 		case "scrypt":
 			var macok bool
 			key, macok = handleScrypt(keyfile)
-			if !macok {return}
+			if !macok {
+				return
+			}
 
 		default:
 			fmt.Println("Unsupported KDF: ", keyfile.Crypto.Kdf)
 			return
 		}
 		share, errDec := decryptAndReturn(keyfile, key)
-		if errDec != nil { fmt.Println(errDec); return}
+		if errDec != nil {
+			fmt.Println(errDec)
+			return
+		}
 		arrayShareBytes = append(arrayShareBytes, share)
 	}
 
@@ -85,10 +94,10 @@ func reacreateSplitKey(cmd *cobra.Command, args []string) {
 }
 
 //This assumes that the MAC verification has been OK
-func decryptAndReturn (kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
+func decryptAndReturn(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	switch strings.ToLower(kf.Crypto.Cipher) {
 	case "aes-128-ctr":
-		privkey, err = decryptAES128CTRBig(kf,key)
+		privkey, err = decryptAES128CTRBig(kf, key)
 	default:
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return
@@ -99,14 +108,20 @@ func decryptAndReturn (kf *goethkey.Keyfile, key []byte) (privkey []byte, err er
 
 func decryptAES128CTRBig(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	block, err := aes.NewCipher(key[0:16])
-	if err != nil { return}
+	if err != nil {
+		return
+	}
 	iv, err := hex.DecodeString(kf.Crypto.Cipherparams.Iv)
-	if err != nil { return}
+	if err != nil {
+		return
+	}
 	stream := cipher.NewCTR(block, iv)
 	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil {  return}
-	privkey = make ([]byte, 68)
-	stream.XORKeyStream(privkey,citx)
+	if err != nil {
+		return
+	}
+	privkey = make([]byte, 68)
+	stream.XORKeyStream(privkey, citx)
 	return
 
 }
