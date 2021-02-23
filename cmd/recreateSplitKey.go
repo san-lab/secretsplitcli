@@ -69,8 +69,12 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 
 	var sharesOut []*share.PriShare
 	for _, b := range arrayShareBytes {
-		s2 := new(sharePrishare)
-		s2.UnmarshalJSON(b)
+		s2 := goethkey.PriShareEmpty()
+		err := s2.UnmarshalJSON(b)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		sharesOut = append(sharesOut, &share.PriShare{s2.I, s2.V})
 	}
 

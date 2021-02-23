@@ -20,7 +20,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -34,8 +33,6 @@ import (
 	"go.dedis.ch/kyber/v3/share"
 	"go.dedis.ch/kyber/v3/suites"
 )
-
-type sharePrishare share.PriShare
 
 // generateKeyfileCmd represents the generateKeyfile command
 var generateKeySplitCmd = &cobra.Command{
@@ -90,8 +87,12 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 	var arrayShareBytes [][]byte
 	for _, s := range sharesN {
-		var shareTemp = sharePrishare{s.I, s.V}
-		b, _ := shareTemp.MarshalJSON()
+		var shareTemp = goethkey.PriShare(s.I, s.V)
+		b, err := shareTemp.MarshalJSON()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		arrayShareBytes = append(arrayShareBytes, b)
 	}
 	xuuid, err := uuid.NewUUID()
@@ -221,60 +222,4 @@ func init() {
 	generateKeySplitCmd.Flags().IntVarP(&minShares, "threshold", "t", 2, "--threshold  \tSecret recovery threshold")
 	generateKeySplitCmd.Flags().StringVarP(&genFilenameBase, "filename", "f", "splitkeyfile", "--filename \tFile base name")
 	generateKeySplitCmd.Flags().StringVarP(&ethkeyStr, "ethkey", "e", "", "--ethkey \tSecret to be split")
-}
-
-func (ps *sharePrishare) Serialize() (buf []byte) {
-
-	uint_I := uint64(ps.I) //byte(I)
-	buf = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint_I)
-
-	temp_buf2, err := ps.V.MarshalBinary()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	buf = append(buf, temp_buf2...)
-	return
-}
-
-func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
-	if len(btes) != 40 {
-		return nil, fmt.Errorf("Wrong buffer length", len(btes))
-	}
-	ps.I = int(binary.LittleEndian.Uint64(btes[:8]))
-	ps.V = pairing.NewSuiteBn256().G2().Scalar()
-	ps.V.UnmarshalBinary(btes[8:])
-	return ps, nil
-}
-
-func (ps *sharePrishare) MarshalJSON() ([]byte, error) {
-	bt := ps.Serialize()
-	return []byte(hex.EncodeToString(bt)), nil
-}
-
-func (ps *sharePrishare) UnmarshalJSON(in []byte) error {
-	ser, err := hex.DecodeString(string(in))
-	if err != nil {
-		return err
-	}
-	ps.Deserialize(ser)
-	return nil
-}
-
-func DeserializePriShare(hexstring string) (*share.PriShare, error) {
-	buf, err := hex.DecodeString(hexstring)
-	if err != nil {
-		return nil, err
-	}
-	tps := new(sharePrishare)
-	tps, err = tps.Deserialize(buf)
-	ps := share.PriShare(*tps)
-	return &ps, err
-}
-
-func SerializePriShare(shr share.PriShare) []byte {
-	tps := sharePrishare(shr)
-	buf := tps.Serialize()
-	return []byte(hex.EncodeToString(buf))
 }
