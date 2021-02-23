@@ -70,9 +70,9 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 		fmt.Printf("Generating %v of %v split of a new random key\n", minShares, numShares)
 
-		suite := suites.MustFind("bn256.G1")
-		secretScalar := pairing.NewSuiteBn256().G1().Scalar().Pick(suite.RandomStream())
-		poly = share.NewPriPoly(pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
+		suite := suites.MustFind("bn256.G2")
+		secretScalar := pairing.NewSuiteBn256().G2().Scalar().Pick(suite.RandomStream())
+		poly = share.NewPriPoly(pairing.NewSuiteBn256().G2(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
 		fmt.Println("Secret key", secretScalar)
 	} else {
 		fmt.Printf("Generating %v of %v split of the key provided\n", minShares, numShares)
@@ -81,8 +81,8 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			return
 		}
-		secretScalar := pairing.NewSuiteBn256().G1().Scalar().SetBytes(ethkey)
-		poly = share.NewPriPoly(pairing.NewSuiteBn256().G1(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
+		secretScalar := pairing.NewSuiteBn256().G2().Scalar().SetBytes(ethkey)
+		poly = share.NewPriPoly(pairing.NewSuiteBn256().G2(), minShares, secretScalar, pairing.NewSuiteBn256().RandomStream())
 		fmt.Println("Secret scalar", secretScalar)
 	}
 
@@ -243,7 +243,7 @@ func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
 		return nil, fmt.Errorf("Wrong buffer length", len(btes))
 	}
 	ps.I = int(binary.LittleEndian.Uint64(btes[:8]))
-	ps.V = pairing.NewSuiteBn256().G1().Scalar()
+	ps.V = pairing.NewSuiteBn256().G2().Scalar()
 	ps.V.UnmarshalBinary(btes[8:])
 	return ps, nil
 }
