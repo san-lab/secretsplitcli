@@ -55,7 +55,16 @@ var ethkey []byte
 //var DefaultPrimeStr = "115792089237316195423570985008687907853269984665640564039457584007913129639747"
 //var defaultPrime, _ = big.NewInt(0).SetString(DefaultPrimeStr, 10)
 
+//This is a hack for overloading the ID field of the keyfile
+//If the first 16 runes/8 bytes are equal to SplitHeader
+//the next 2 runes encode the quorum count (quorum <256)
+const SplitHeader = "SplitKey"
+
 func generateKeySplit(cmd *cobra.Command, args []string) {
+	if numShares > 255 || minShares > numShares {
+		fmt.Println("Invalid split parameters:", numShares, minShares)
+		return
+	}
 	var poly *share.PriPoly
 	if len(ethkeyStr) == 0 {
 
@@ -85,10 +94,14 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		b, _ := shareTemp.MarshalJSON()
 		arrayShareBytes = append(arrayShareBytes, b)
 	}
-
+	xuuid, err := uuid.NewUUID()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	for i := 0; i < len(arrayShareBytes); i++ {
 		keyFileName := fmt.Sprintf("%s%vof%v.json", genFilenameBase, i+1, numShares)
-		fmt.Printf("Generating keyfile No %v (%s)\n", i, keyFileName)
+		fmt.Printf("Generating keyfile No %v (%s)\n", i+1, keyFileName)
 		shareBytes := arrayShareBytes[i]
 		kf := goethkey.Keyfile{}
 
@@ -148,7 +161,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 		//Letsencrypt
 		iv := make([]byte, 16)
-		ciphertext := make([]byte, 68)
+		ciphertext := make([]byte, len(shareBytes))
 		rand.Read(iv)
 
 		block, err := aes.NewCipher(key[0:16])
@@ -176,8 +189,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 		kf.Address = hex.EncodeToString(addr)
 
-		xuuid, err := uuid.NewUUID()
-		kf.ID = xuuid.String()
+		kf.ID = SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
 		parambytes, err := json.Marshal(&kf.Crypto.KdfScryptParams)
 		kf.Crypto.KdfparamsPack.UnmarshalJSON(parambytes)
 
@@ -213,10 +225,9 @@ func init() {
 
 func (ps *sharePrishare) Serialize() (buf []byte) {
 
-	uint_I := uint16(ps.I)
-	temp_buf1 := []byte{0, 0}
-	binary.LittleEndian.PutUint16(temp_buf1, uint_I)
-	buf = append(buf, temp_buf1...)
+	uint_I := uint64(ps.I) //byte(I)
+	buf = make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint_I)
 
 	temp_buf2, err := ps.V.MarshalBinary()
 	if err != nil {
@@ -228,12 +239,12 @@ func (ps *sharePrishare) Serialize() (buf []byte) {
 }
 
 func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
-	if len(btes) != 34 {
+	if len(btes) != 40 {
 		return nil, fmt.Errorf("Wrong buffer length", len(btes))
 	}
-	ps.I = int(btes[0])
+	ps.I = int(binary.LittleEndian.Uint64(btes[:8]))
 	ps.V = pairing.NewSuiteBn256().G1().Scalar()
-	ps.V.UnmarshalBinary(btes[2:])
+	ps.V.UnmarshalBinary(btes[8:])
 	return ps, nil
 }
 
@@ -249,4 +260,21 @@ func (ps *sharePrishare) UnmarshalJSON(in []byte) error {
 	}
 	ps.Deserialize(ser)
 	return nil
+}
+
+func DeserializePriShare(hexstring string) (*share.PriShare, error) {
+	buf, err := hex.DecodeString(hexstring)
+	if err != nil {
+		return nil, err
+	}
+	tps := new(sharePrishare)
+	tps, err = tps.Deserialize(buf)
+	ps := share.PriShare(*tps)
+	return &ps, err
+}
+
+func SerializePriShare(shr share.PriShare) []byte {
+	tps := sharePrishare(shr)
+	buf := tps.Serialize()
+	return []byte(hex.EncodeToString(buf))
 }

@@ -16,8 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -49,35 +47,12 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 		var filename string
 		fmt.Print("Enter the name of share " + strconv.Itoa(i+1) + ": ")
 		fmt.Scanf("%s", &filename)
-
-		keyfile, err := goethkey.ReadKeyfile(filename)
+		keyfile, err := ReadAndProcessKeyfile(filename)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-
-		//TODO Handle the unencrypted kyefiles
-
-		//derive the key from password
-		var key []byte
-		switch keyfile.Crypto.Kdf {
-		case "scrypt":
-			var macok bool
-			key, macok = handleScrypt(keyfile)
-			if !macok {
-				return
-			}
-
-		default:
-			fmt.Println("Unsupported KDF: ", keyfile.Crypto.Kdf)
-			return
-		}
-		share, errDec := decryptAndReturn(keyfile, key)
-		if errDec != nil {
-			fmt.Println(errDec)
-			return
-		}
-		arrayShareBytes = append(arrayShareBytes, share)
+		arrayShareBytes = append(arrayShareBytes, keyfile.Ciphertext)
 	}
 
 	var sharesOut []*share.PriShare
@@ -93,37 +68,43 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 	fmt.Printf("Private key: \t%s\n", retrievedKey)
 }
 
+func ReadAndProcessKeyfile(filename string) (keyfile *goethkey.Keyfile, err error) {
+	keyfile, err = goethkey.ReadKeyfile(filename)
+	if err != nil {
+		return
+	}
+
+	//TODO Handle the unencrypted kyefiles
+
+	//derive the key from password
+	var key []byte
+	switch keyfile.Crypto.Kdf {
+	case "scrypt":
+		var macok bool
+		key, macok = handleScrypt(keyfile)
+		if !macok {
+			return
+		}
+
+	default:
+		err = fmt.Errorf("Unsupported KDF: " + keyfile.Crypto.Kdf)
+		return
+	}
+	err = decryptAndReturn(keyfile, key)
+	return
+}
+
 //This assumes that the MAC verification has been OK
-func decryptAndReturn(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
+func decryptAndReturn(kf *goethkey.Keyfile, key []byte) (err error) {
 	switch strings.ToLower(kf.Crypto.Cipher) {
 	case "aes-128-ctr":
-		privkey, err = decryptAES128CTRBig(kf, key)
+		kf.Ciphertext, err = decryptAES128CTR(kf, key)
 	default:
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return
 	}
 
-	return privkey, nil
-}
-
-func decryptAES128CTRBig(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
-	block, err := aes.NewCipher(key[0:16])
-	if err != nil {
-		return
-	}
-	iv, err := hex.DecodeString(kf.Crypto.Cipherparams.Iv)
-	if err != nil {
-		return
-	}
-	stream := cipher.NewCTR(block, iv)
-	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil {
-		return
-	}
-	privkey = make([]byte, 68)
-	stream.XORKeyStream(privkey, citx)
-	return
-
+	return nil
 }
 
 func init() {

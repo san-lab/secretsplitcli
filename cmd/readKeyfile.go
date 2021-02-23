@@ -18,33 +18,42 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
-	"os"
-	"github.com/san-lab/secretsplitcli/goethkey"
 	"bufio"
-	"encoding/hex"
-	"strings"
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/hex"
+	"os"
+	"strings"
+
 	"github.com/btcsuite/btcd/btcec"
+	"github.com/san-lab/secretsplitcli/goethkey"
+	"github.com/spf13/cobra"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // readKeyfileCmd represents the readKeyfile command
 var readKeyfileCmd = &cobra.Command{
 	Use:   "readKeyfile filename",
 	Short: "Read an Ethereum key file",
-	Long: `A longer description will follow soon.`,
-	Run: readKeyfile,
+	Long:  `A longer description will follow soon.`,
+	Run:   readKeyfile2,
 }
 
-func readKeyfile (cmd *cobra.Command, args []string) {
+func readKeyfile2(cmd *cobra.Command, args []string) {
 	if len(args) != 1 {
 		fmt.Println("missing or ambiguous filename")
 		return
 	}
-	keyfile, err := goethkey.ReadKeyfile(args[0])
-	if err != nil { fmt.Println(err); return}
+	ReadKeyfile(args[0])
+}
+
+func ReadKeyfile(filename string) {
+
+	keyfile, err := goethkey.ReadKeyfile(filename)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//TODO Handle the unencrypted kyefiles
 
@@ -54,7 +63,9 @@ func readKeyfile (cmd *cobra.Command, args []string) {
 	case "scrypt":
 		var macok bool
 		key, macok = handleScrypt(keyfile)
-		if !macok {return}
+		if !macok {
+			return
+		}
 
 	default:
 		fmt.Println("Unsupported KDF: ", keyfile.Crypto.Kdf)
@@ -64,10 +75,10 @@ func readKeyfile (cmd *cobra.Command, args []string) {
 }
 
 //This assumes that the MAC verification has been OK
-func decrypt (kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
+func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	switch strings.ToLower(kf.Crypto.Cipher) {
 	case "aes-128-ctr":
-		privkey, err = decryptAES128CTR(kf,key)
+		privkey, err = decryptAES128CTR(kf, key)
 	default:
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return
@@ -89,38 +100,51 @@ func decrypt (kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 
 func decryptAES128CTR(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	block, err := aes.NewCipher(key[0:16])
-	if err != nil { return}
+	if err != nil {
+		return
+	}
 	iv, err := hex.DecodeString(kf.Crypto.Cipherparams.Iv)
-	if err != nil { return}
+	if err != nil {
+		return
+	}
 	stream := cipher.NewCTR(block, iv)
 	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil {  return}
-	privkey = make ([]byte, 32)
-	stream.XORKeyStream(privkey,citx)
+	if err != nil {
+		return
+	}
+	privkey = make([]byte, len(citx))
+	stream.XORKeyStream(privkey, citx)
 	return
 
 }
 
-
 func handleScrypt(kf *goethkey.Keyfile) (key []byte, macok bool) {
 	pass, err := readPassword("Keyfile password:")
-	if err != nil { fmt.Println(err); return}
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	//derive key
 	key, err = goethkey.KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
-	if err != nil { fmt.Println(err); return}
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//read the ciphertext
 	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil { fmt.Println(err); return}
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//verify mac
-	mymac :=  hex.EncodeToString(goethkey.Keccak256(append(key[16:32],citx...)))
+	mymac := hex.EncodeToString(goethkey.Keccak256(append(key[16:32], citx...)))
 	macok = (mymac == kf.Crypto.Mac)
 	fmt.Printf("\nMAC verification: %v\n\n", macok)
 
 	return key, macok
 }
-
 
 //Reading a password on a CLI without echoing it
 func readPassword(prompt string) ([]byte, error) {
@@ -137,7 +161,6 @@ func readPassword(prompt string) ([]byte, error) {
 	}
 
 }
-
 
 func init() {
 	rootCmd.AddCommand(readKeyfileCmd)
