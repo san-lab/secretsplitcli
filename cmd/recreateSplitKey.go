@@ -37,14 +37,13 @@ var recreateSplitKeyCmd = &cobra.Command{
 
 func recreateSplitKey(cmd *cobra.Command, args []string) {
 	var numShares int
-	fmt.Print("Enter the number of shares to be used: ")
-	fmt.Scanf("%d", &numShares)
-	fmt.Print("\n")
+	numShares = 1
 
 	var arrayShareBytes [][]byte
+	var filename string
+	var groupID string
 
 	for i := 0; i < numShares; i++ {
-		var filename string
 		fmt.Print("Enter the name of share " + strconv.Itoa(i+1) + ": ")
 		fmt.Scanf("%s", &filename)
 		keyfile, err := ReadAndProcessKeyfile(filename)
@@ -52,7 +51,20 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 			fmt.Println(err)
 			return
 		}
-		arrayShareBytes = append(arrayShareBytes, keyfile.Ciphertext)
+		id := keyfile.ID
+		if i == 0 {
+			numSharesHex := id[8:10]
+			numShares64, _ := strconv.ParseInt(numSharesHex,16,64)
+			numShares = int(numShares64)
+			groupID = id[13:]
+			fmt.Println("Stored group ID: ", groupID)
+		}
+		if i > 0 && id[13:] != groupID {
+			fmt.Println("Error this share does not belong to the same group as the previous ones, try again")
+			i--
+		} else {
+			arrayShareBytes = append(arrayShareBytes, keyfile.Ciphertext)
+		}
 	}
 
 	var sharesOut []*share.PriShare
