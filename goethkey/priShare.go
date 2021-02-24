@@ -9,6 +9,11 @@ import (
 	"go.dedis.ch/kyber/v3/share"
 )
 
+//This is a hack for overloading the ID field of the keyfile
+//If the first 16 runes/8 bytes are equal to SplitHeader
+//the next 2 runes encode the quorum count (quorum <256)
+const SplitHeader = "SplitKey"
+
 func Serialize(ps *share.PriShare) (buf []byte, err error) {
 	uint_I := uint64(ps.I) //byte(I)
 	buf = make([]byte, 8)

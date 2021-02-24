@@ -48,11 +48,6 @@ var ethkey []byte
 //var DefaultPrimeStr = "115792089237316195423570985008687907853269984665640564039457584007913129639747"
 //var defaultPrime, _ = big.NewInt(0).SetString(DefaultPrimeStr, 10)
 
-//This is a hack for overloading the ID field of the keyfile
-//If the first 16 runes/8 bytes are equal to SplitHeader
-//the next 2 runes encode the quorum count (quorum <256)
-const SplitHeader = "SplitKey"
-
 func generateKeySplit(cmd *cobra.Command, args []string) {
 	if numShares > 255 || minShares > numShares {
 		fmt.Println("Invalid split parameters:", numShares, minShares)
@@ -133,7 +128,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		err = goethkey.EncryptAES128(&kf, shareBytes, pass)
 
 		kf.Address = "NaN"
-		kf.ID = SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
+		kf.ID = goethkey.SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
 
 		bytes, err := json.Marshal(&kf)
 		if err != nil {
