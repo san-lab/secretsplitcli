@@ -78,7 +78,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 	var arrayShareBytes [][]byte
 	for _, s := range sharesN {
-		b, err := goethkey.MarshalHEX(s)
+		b, err := goethkey.Serialize(s)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -126,7 +126,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		}
 
 		err = goethkey.EncryptAES128(&kf, shareBytes, pass)
-
+		kf.Version = 4 //Removed double-hexing
 		kf.Address = "NaN"
 		kf.ID = goethkey.SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
 

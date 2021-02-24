@@ -49,7 +49,61 @@ type KdfScryptparams struct {
 	P     int    `json:"p"`
 }
 
-func ReadKeyfile(password []byte, filename string) (*Keyfile, error) {
+func ReadAndProcessKeyfile(filename string) (keyfile *Keyfile, err error) {
+	pass, err := ReadPassword("Keyfile password:")
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	keyfile, err = ReadKeyfile(filename)
+	if err != nil {
+		return keyfile, err
+	}
+
+	//TODO Handle the unencrypted kyefiles
+
+	//derive the key from password
+	var key []byte
+	switch keyfile.Crypto.Kdf {
+	case "scrypt":
+		key, err = handleScrypt(keyfile, pass)
+		if err != nil {
+			return
+		}
+
+	default:
+		err = fmt.Errorf("Unsupported KDF: " + keyfile.Crypto.Kdf)
+		return
+	}
+	keyfile.Plaintext, err = Decrypt(keyfile, key)
+	return
+}
+
+func handleScrypt(kf *Keyfile, pass []byte) (key []byte, err error) {
+
+	//derive key
+	key, err = KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
+	if err != nil {
+		return
+	}
+
+	//read the ciphertext
+	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
+	if err != nil {
+		return
+	}
+
+	//verify mac
+	mymac := hex.EncodeToString(Keccak256(append(key[16:32], citx...)))
+
+	if mymac != kf.Crypto.Mac {
+		err = fmt.Errorf("MAC verification failed")
+	}
+
+	return
+}
+
+func ReadKeyfile(filename string) (*Keyfile, error) {
 	filebytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err

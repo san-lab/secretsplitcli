@@ -45,7 +45,7 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 	for i := 0; i < numShares; i++ {
 		fmt.Print("Enter the name of share " + strconv.Itoa(i+1) + ": ")
 		fmt.Scanf("%s", &filename)
-		keyfile, err := ReadAndProcessKeyfile(filename)
+		keyfile, err := goethkey.ReadAndProcessKeyfile(filename)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -69,7 +69,7 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 	var sharesOut []*share.PriShare
 	for _, b := range arrayShareBytes {
 
-		ps, err := goethkey.UnmarshalHEX(b)
+		ps, err := goethkey.Deserialize(b)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -81,37 +81,6 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 	b, _ := rec.MarshalBinary()
 	retrievedKey := hex.EncodeToString(b)
 	fmt.Printf("Private key: \t%s\n", retrievedKey)
-}
-
-func ReadAndProcessKeyfile(filename string) (keyfile *goethkey.Keyfile, err error) {
-	pass, err := goethkey.ReadPassword("Keyfile password:")
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	keyfile, err = goethkey.ReadKeyfile(pass, filename)
-	if err != nil {
-		return keyfile, err
-	}
-
-	//TODO Handle the unencrypted kyefiles
-
-	//derive the key from password
-	var key []byte
-	switch keyfile.Crypto.Kdf {
-	case "scrypt":
-		var macok bool
-		key, macok = handleScrypt(keyfile, pass)
-		if !macok {
-			return keyfile, fmt.Errorf("MAC wrong")
-		}
-
-	default:
-		err = fmt.Errorf("Unsupported KDF: " + keyfile.Crypto.Kdf)
-		return nil, err
-	}
-	keyfile.Plaintext, err = goethkey.Decrypt(keyfile, key)
-	return keyfile, err
 }
 
 func init() {

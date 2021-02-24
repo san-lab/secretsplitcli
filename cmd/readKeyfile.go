@@ -30,62 +30,25 @@ var readKeyfileCmd = &cobra.Command{
 	Use:   "readKeyfile filename",
 	Short: "Read an Ethereum key file",
 	Long:  `A longer description will follow soon.`,
-	Run:   readKeyfile2,
+	Run:   readKeyfile,
 }
 
-func readKeyfile2(cmd *cobra.Command, args []string) {
+func readKeyfile(cmd *cobra.Command, args []string) {
 	if len(args) != 1 {
 		fmt.Println("missing or ambiguous filename")
 		return
 	}
-	ReadKeyfile(args[0])
-}
-
-func ReadKeyfile(filename string) (*goethkey.Keyfile, error) {
-	pass, err := goethkey.ReadPassword("Keyfile password:")
+	kf, err := goethkey.ReadAndProcessKeyfile(args[0])
 	if err != nil {
-		return nil, err
-	}
-	keyfile, err := goethkey.ReadKeyfile(pass, filename)
-	if err != nil {
-		return nil, err
-	}
-
-	//TODO Handle the unencrypted kyefiles
-
-	//derive the key from password
-	var key []byte
-	switch keyfile.Crypto.Kdf {
-	case "scrypt":
-		var macok bool
-		key, macok = handleScrypt(keyfile, pass)
-		if !macok {
-			return nil, fmt.Errorf("MAC wrong")
-		}
-
-	default:
-
-		return nil, fmt.Errorf("Unsupported KDF: ", keyfile.Crypto.Kdf)
-	}
-	plaintext, err := decrypt(keyfile, key)
-	keyfile.Plaintext = plaintext
-	return keyfile, err
-}
-
-//This assumes that the MAC verification has been OK
-func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
-
-	privkey, err = goethkey.Decrypt(kf, key)
-	if err != nil {
-		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
+		fmt.Println(err)
 		return
 	}
 
-	prv, pubkeyec := btcec.PrivKeyFromBytes(btcec.S256(), privkey)
+	prv, pubkeyec := btcec.PrivKeyFromBytes(btcec.S256(), kf.Plaintext)
 	pubkeyeth := append(pubkeyec.X.Bytes(), pubkeyec.Y.Bytes()...)
 	fmt.Printf("Public key: \t%s\n", hex.EncodeToString(pubkeyeth))
 	if goethkey.Verbose {
-		fmt.Printf("Private key: \t%s\n", hex.EncodeToString(privkey))
+		fmt.Printf("Private key: \t%s\n", hex.EncodeToString(kf.Plaintext))
 		fmt.Println("D:", prv.D)
 		fmt.Println("X:", pubkeyec.X)
 		fmt.Println("Y:", pubkeyec.Y)
@@ -95,30 +58,6 @@ func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	fmt.Printf("Ethereum addr: %s\n", hex.EncodeToString(addr))
 	fmt.Printf("(in file: %s)\n", kf.Address)
 	return
-}
-
-func handleScrypt(kf *goethkey.Keyfile, pass []byte) (key []byte, macok bool) {
-
-	//derive key
-	key, err := goethkey.KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	//read the ciphertext
-	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	//verify mac
-	mymac := hex.EncodeToString(goethkey.Keccak256(append(key[16:32], citx...)))
-	macok = (mymac == kf.Crypto.Mac)
-	fmt.Printf("\nMAC verification: %v\n\n", macok)
-
-	return key, macok
 }
 
 func init() {
