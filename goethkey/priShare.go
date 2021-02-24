@@ -4,22 +4,23 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/kyber/v3/pairing"
 	"go.dedis.ch/kyber/v3/share"
 )
 
-type sharePrishare share.PriShare
+type SharePrishareAlias share.PriShare
 
-func PriShareEmpty() (*sharePrishare) {
-	return new(sharePrishare)
+func PriShareEmpty() *SharePrishareAlias {
+	return new(SharePrishareAlias)
 }
 
-func PriShare(I int, V kyber.Scalar) (sharePrishare) {
-	return sharePrishare{I, V}
+func PriShare(I int, V kyber.Scalar) SharePrishareAlias {
+	return SharePrishareAlias{I, V}
 }
 
-func (ps *sharePrishare) Serialize() (buf []byte, err error) {
+func (ps *SharePrishareAlias) Serialize() (buf []byte, err error) {
 
 	uint_I := uint64(ps.I) //byte(I)
 	buf = make([]byte, 8)
@@ -33,7 +34,7 @@ func (ps *sharePrishare) Serialize() (buf []byte, err error) {
 	return
 }
 
-func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
+func (ps *SharePrishareAlias) Deserialize(btes []byte) (*SharePrishareAlias, error) {
 	if len(btes) != 40 {
 		return nil, errors.New("Incorrect size for the bytearray to be deserialized")
 	}
@@ -43,7 +44,7 @@ func (ps *sharePrishare) Deserialize(btes []byte) (*sharePrishare, error) {
 	return ps, nil
 }
 
-func (ps *sharePrishare) MarshalJSON() ([]byte, error) {
+func (ps *SharePrishareAlias) MarshalJSON() ([]byte, error) {
 	bt, err := ps.Serialize()
 	if err != nil {
 		return nil, err
@@ -51,7 +52,7 @@ func (ps *sharePrishare) MarshalJSON() ([]byte, error) {
 	return []byte(hex.EncodeToString(bt)), nil
 }
 
-func (ps *sharePrishare) UnmarshalJSON(in []byte) error {
+func (ps *SharePrishareAlias) UnmarshalJSON(in []byte) error {
 	ser, err := hex.DecodeString(string(in))
 	if err != nil {
 		return err
