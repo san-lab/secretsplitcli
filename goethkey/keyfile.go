@@ -50,16 +50,16 @@ type KdfScryptparams struct {
 }
 
 func ReadAndProcessKeyfile(filename string) (keyfile *Keyfile, err error) {
+
+	keyfile, err = ReadKeyfile(filename)
+	if err != nil {
+		return keyfile, err
+	}
 	pass, err := ReadPassword("Keyfile password:")
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
-	keyfile, err = ReadKeyfile(filename)
-	if err != nil {
-		return keyfile, err
-	}
-
 	//TODO Handle the unencrypted kyefiles
 
 	//derive the key from password
