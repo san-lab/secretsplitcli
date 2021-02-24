@@ -54,7 +54,7 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 		id := keyfile.ID
 		if i == 0 {
 			numSharesHex := id[8:10]
-			numShares64, _ := strconv.ParseInt(numSharesHex,16,64)
+			numShares64, _ := strconv.ParseInt(numSharesHex, 16, 64)
 			numShares = int(numShares64)
 			groupID = id[13:]
 			fmt.Println("Stored group ID: ", groupID)
@@ -63,7 +63,7 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 			fmt.Println("Error this share does not belong to the same group as the previous ones, try again")
 			i--
 		} else {
-			arrayShareBytes = append(arrayShareBytes, keyfile.Ciphertext)
+			arrayShareBytes = append(arrayShareBytes, keyfile.Plaintext)
 		}
 	}
 
@@ -85,9 +85,14 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 }
 
 func ReadAndProcessKeyfile(filename string) (keyfile *goethkey.Keyfile, err error) {
-	keyfile, err = goethkey.ReadKeyfile(filename)
+	pass, err := goethkey.ReadPassword("Keyfile password:")
 	if err != nil {
-		return
+		fmt.Println(err)
+		return nil, err
+	}
+	keyfile, err = goethkey.ReadKeyfile(pass, filename)
+	if err != nil {
+		return keyfile, err
 	}
 
 	//TODO Handle the unencrypted kyefiles
@@ -97,24 +102,24 @@ func ReadAndProcessKeyfile(filename string) (keyfile *goethkey.Keyfile, err erro
 	switch keyfile.Crypto.Kdf {
 	case "scrypt":
 		var macok bool
-		key, macok = handleScrypt(keyfile)
+		key, macok = handleScrypt(keyfile, pass)
 		if !macok {
-			return
+			return keyfile, fmt.Errorf("MAC wrong")
 		}
 
 	default:
 		err = fmt.Errorf("Unsupported KDF: " + keyfile.Crypto.Kdf)
-		return
+		return nil, err
 	}
 	err = decryptAndReturn(keyfile, key)
-	return
+	return keyfile, err
 }
 
 //This assumes that the MAC verification has been OK
 func decryptAndReturn(kf *goethkey.Keyfile, key []byte) (err error) {
 	switch strings.ToLower(kf.Crypto.Cipher) {
 	case "aes-128-ctr":
-		kf.Ciphertext, err = decryptAES128CTR(kf, key)
+		kf.Plaintext, err = goethkey.DecryptAES128CTR(kf, key)
 	default:
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return

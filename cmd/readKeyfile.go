@@ -18,17 +18,12 @@ package cmd
 import (
 	"fmt"
 
-	"bufio"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/hex"
-	"os"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // readKeyfileCmd represents the readKeyfile command
@@ -47,12 +42,14 @@ func readKeyfile2(cmd *cobra.Command, args []string) {
 	ReadKeyfile(args[0])
 }
 
-func ReadKeyfile(filename string) {
-
-	keyfile, err := goethkey.ReadKeyfile(filename)
+func ReadKeyfile(filename string) (*goethkey.Keyfile, error) {
+	pass, err := goethkey.ReadPassword("Keyfile password:")
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
+	}
+	keyfile, err := goethkey.ReadKeyfile(pass, filename)
+	if err != nil {
+		return nil, err
 	}
 
 	//TODO Handle the unencrypted kyefiles
@@ -62,32 +59,35 @@ func ReadKeyfile(filename string) {
 	switch keyfile.Crypto.Kdf {
 	case "scrypt":
 		var macok bool
-		key, macok = handleScrypt(keyfile)
+		key, macok = handleScrypt(keyfile, pass)
 		if !macok {
-			return
+			return nil, fmt.Errorf("MAC wrong")
 		}
 
 	default:
-		fmt.Println("Unsupported KDF: ", keyfile.Crypto.Kdf)
-		return
+
+		return nil, fmt.Errorf("Unsupported KDF: ", keyfile.Crypto.Kdf)
 	}
-	decrypt(keyfile, key)
+	plaintext, err := decrypt(keyfile, key)
+	keyfile.Plaintext = plaintext
+	return keyfile, err
 }
 
 //This assumes that the MAC verification has been OK
 func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	switch strings.ToLower(kf.Crypto.Cipher) {
 	case "aes-128-ctr":
-		privkey, err = decryptAES128CTR(kf, key)
+		privkey, err = goethkey.DecryptAES128CTR(kf, key)
 	default:
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return
 	}
-	fmt.Printf("Private key: \t%s\n", hex.EncodeToString(privkey))
+
 	prv, pubkeyec := btcec.PrivKeyFromBytes(btcec.S256(), privkey)
 	pubkeyeth := append(pubkeyec.X.Bytes(), pubkeyec.Y.Bytes()...)
 	fmt.Printf("Public key: \t%s\n", hex.EncodeToString(pubkeyeth))
 	if goethkey.Verbose {
+		fmt.Printf("Private key: \t%s\n", hex.EncodeToString(privkey))
 		fmt.Println("D:", prv.D)
 		fmt.Println("X:", pubkeyec.X)
 		fmt.Println("Y:", pubkeyec.Y)
@@ -98,34 +98,10 @@ func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	return
 }
 
-func decryptAES128CTR(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
-	block, err := aes.NewCipher(key[0:16])
-	if err != nil {
-		return
-	}
-	iv, err := hex.DecodeString(kf.Crypto.Cipherparams.Iv)
-	if err != nil {
-		return
-	}
-	stream := cipher.NewCTR(block, iv)
-	citx, err := hex.DecodeString(kf.Crypto.Ciphertext)
-	if err != nil {
-		return
-	}
-	privkey = make([]byte, len(citx))
-	stream.XORKeyStream(privkey, citx)
-	return
+func handleScrypt(kf *goethkey.Keyfile, pass []byte) (key []byte, macok bool) {
 
-}
-
-func handleScrypt(kf *goethkey.Keyfile) (key []byte, macok bool) {
-	pass, err := readPassword("Keyfile password:")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
 	//derive key
-	key, err = goethkey.KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
+	key, err := goethkey.KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -144,22 +120,6 @@ func handleScrypt(kf *goethkey.Keyfile) (key []byte, macok bool) {
 	fmt.Printf("\nMAC verification: %v\n\n", macok)
 
 	return key, macok
-}
-
-//Reading a password on a CLI without echoing it
-func readPassword(prompt string) ([]byte, error) {
-	fmt.Print(prompt)
-	fd := int(os.Stdin.Fd())
-	//Sadly terminal will not work under IDE, hence the 'else'
-	if terminal.IsTerminal(fd) {
-		return terminal.ReadPassword(fd)
-	} else {
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Scan()
-		pass := scanner.Bytes()
-		return pass, nil
-	}
-
 }
 
 func init() {

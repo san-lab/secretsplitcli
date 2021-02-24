@@ -16,16 +16,12 @@ limitations under the License.
 package cmd
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/google/uuid"
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
@@ -107,33 +103,13 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		kf := goethkey.Keyfile{}
 
 		kf.Crypto.Kdf = kdfNew
-		var pass, p2 []byte
-		var err error
-		for true {
-			pass, err = readPassword("Password for the keyfile:")
-			fmt.Print("\n")
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			p2, err = readPassword("Repeat password:")
-			fmt.Print("\n")
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if len(pass) < 6 {
-				fmt.Println("Password too short, try again\n")
-				continue
-			}
-			if bytes.Equal(pass, p2) {
-				break
-			}
-			fmt.Println("Passwords do not match, try again\n")
+
+		pass, err := goethkey.SetPassword()
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
 
-		//Derive the key from password
-		var key []byte
 		salt := make([]byte, 16)
 		rand.Read(salt)
 		/*
@@ -155,44 +131,10 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		key, err = goethkey.KeyFromPassScrypt(pass, kf.Crypto.KdfScryptParams)
-		if err != nil {
-			fmt.Println(err)
-		}
+		err = goethkey.EncryptAES128(&kf, shareBytes, pass)
 
-		//Letsencrypt
-		iv := make([]byte, 16)
-		ciphertext := make([]byte, len(shareBytes))
-		rand.Read(iv)
-
-		block, err := aes.NewCipher(key[0:16])
-		if err != nil {
-			return
-		}
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(ciphertext, shareBytes)
-
-		kf.Crypto.Cipherparams.Iv = hex.EncodeToString(iv)
-		kf.Crypto.Ciphertext = hex.EncodeToString(ciphertext)
-		kf.Crypto.Cipher = "aes-128-ctr"
-
-		mac := goethkey.Keccak256(append(key[16:], ciphertext...))
-		kf.Crypto.Mac = hex.EncodeToString(mac)
-		kf.Version = 3
-		//_, pubkeyec := btcec.PrivKeyFromBytes(btcec.S256(), ethkey)
-		//pubkeyeth := append(pubkeyec.X.Bytes(), pubkeyec.Y.Bytes()...)
-
-		x, y := btcec.S256().ScalarBaseMult(shareBytes)
-		pubkeyeth := append(x.Bytes(), y.Bytes()...)
-		//fmt.Printf("Public key: %s\n", hex.EncodeToString(pubkeyeth))
-		kecc := goethkey.Keccak256(pubkeyeth)
-		addr := kecc[12:]
-
-		kf.Address = hex.EncodeToString(addr)
-
+		kf.Address = "NaN"
 		kf.ID = SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
-		parambytes, err := json.Marshal(&kf.Crypto.KdfScryptParams)
-		kf.Crypto.KdfparamsPack.UnmarshalJSON(parambytes)
 
 		bytes, err := json.Marshal(&kf)
 		if err != nil {
