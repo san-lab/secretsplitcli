@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"encoding/hex"
-	"strings"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/san-lab/secretsplitcli/goethkey"
@@ -75,10 +74,9 @@ func ReadKeyfile(filename string) (*goethkey.Keyfile, error) {
 
 //This assumes that the MAC verification has been OK
 func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
-	switch strings.ToLower(kf.Crypto.Cipher) {
-	case "aes-128-ctr":
-		privkey, err = goethkey.DecryptAES128CTR(kf, key)
-	default:
+
+	privkey, err = goethkey.Decrypt(kf, key)
+	if err != nil {
 		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
 		return
 	}
@@ -95,6 +93,7 @@ func decrypt(kf *goethkey.Keyfile, key []byte) (privkey []byte, err error) {
 	kecc := goethkey.Keccak256(pubkeyeth)
 	addr := kecc[12:]
 	fmt.Printf("Ethereum addr: %s\n", hex.EncodeToString(addr))
+	fmt.Printf("(in file: %s)\n", kf.Address)
 	return
 }
 

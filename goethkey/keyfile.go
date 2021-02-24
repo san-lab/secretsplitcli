@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/ssh/terminal"
 
@@ -155,6 +156,17 @@ func ReadPassword(prompt string) ([]byte, error) {
 		return pass, nil
 	}
 
+}
+
+func Decrypt(kf *Keyfile, key []byte) (plaintext []byte, err error) {
+	switch strings.ToLower(kf.Crypto.Cipher) {
+	case "aes-128-ctr":
+		plaintext, err = DecryptAES128CTR(kf, key)
+	default:
+		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
+		return
+	}
+	return
 }
 
 func DecryptAES128CTR(kf *Keyfile, key []byte) (privkey []byte, err error) {

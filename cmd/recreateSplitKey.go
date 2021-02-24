@@ -19,7 +19,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/san-lab/secretsplitcli/goethkey"
 	"github.com/spf13/cobra"
@@ -69,13 +68,13 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 
 	var sharesOut []*share.PriShare
 	for _, b := range arrayShareBytes {
-		s2 := goethkey.PriShareEmpty()
-		err := s2.UnmarshalJSON(b)
+
+		ps, err := goethkey.UnmarshalHEX(b)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		sharesOut = append(sharesOut, &share.PriShare{s2.I, s2.V})
+		sharesOut = append(sharesOut, ps)
 	}
 
 	rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G2(), sharesOut, minShares, minShares)
@@ -111,21 +110,8 @@ func ReadAndProcessKeyfile(filename string) (keyfile *goethkey.Keyfile, err erro
 		err = fmt.Errorf("Unsupported KDF: " + keyfile.Crypto.Kdf)
 		return nil, err
 	}
-	err = decryptAndReturn(keyfile, key)
+	keyfile.Plaintext, err = goethkey.Decrypt(keyfile, key)
 	return keyfile, err
-}
-
-//This assumes that the MAC verification has been OK
-func decryptAndReturn(kf *goethkey.Keyfile, key []byte) (err error) {
-	switch strings.ToLower(kf.Crypto.Cipher) {
-	case "aes-128-ctr":
-		kf.Plaintext, err = goethkey.DecryptAES128CTR(kf, key)
-	default:
-		err = fmt.Errorf("Not implemented cipher: %s\n", kf.Crypto.Cipher)
-		return
-	}
-
-	return nil
 }
 
 func init() {

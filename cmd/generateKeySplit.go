@@ -83,8 +83,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 
 	var arrayShareBytes [][]byte
 	for _, s := range sharesN {
-		var shareTemp = goethkey.PriShare(s.I, s.V)
-		b, err := shareTemp.MarshalJSON()
+		b, err := goethkey.MarshalHEX(s)
 		if err != nil {
 			fmt.Println(err)
 			return
