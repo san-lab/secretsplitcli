@@ -90,6 +90,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		return
 	}
+	var kf_ID string
 	for i := 0; i < len(arrayShareBytes); i++ {
 		keyFileName := fmt.Sprintf("%s%vof%v.json", genFilenameBase, i+1, numShares)
 		fmt.Printf("Generating keyfile No %v (%s)\n", i+1, keyFileName)
@@ -129,7 +130,7 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		kf.Version = 4 //Removed double-hexing
 		kf.Address = "NaN"
 		kf.ID = goethkey.SplitHeader + hex.EncodeToString([]byte{byte(minShares)}) + hex.EncodeToString([]byte{byte(i)}) + "-" + xuuid.String()
-
+		kf_ID = kf.ID
 		bytes, err := json.Marshal(&kf)
 		if err != nil {
 			fmt.Println(err)
@@ -138,7 +139,13 @@ func generateKeySplit(cmd *cobra.Command, args []string) {
 		ioutil.WriteFile(keyFileName, bytes, 0644)
 		fmt.Printf("File %s generated successfully\n", keyFileName)
 	}
-	fmt.Println("Private key correctly split and stored!!")
+	//keyfile, err := goethkey.ReadAndProcessKeyfile(keyFileName)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//groupID := keyfile.ID[13:]
+	fmt.Printf("Private key correctly split and stored for the suite with id %s!!\n", kf_ID[13:])
 }
 
 func init() {
