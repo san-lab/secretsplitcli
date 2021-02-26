@@ -78,9 +78,13 @@ func recreateSplitKey(cmd *cobra.Command, args []string) {
 	}
 
 	rec, _ := share.RecoverSecret(pairing.NewSuiteBn256().G2(), sharesOut, minShares, minShares)
+	pubrec := pairing.NewSuiteBn256().G2().Point().Mul(rec, nil)
 	b, _ := rec.MarshalBinary()
+	pbb, _ := pubrec.MarshalBinary()
 	retrievedKey := hex.EncodeToString(b)
+	retPubKey := hex.EncodeToString(pbb)
 	fmt.Printf("Private key: \t%s\n", retrievedKey)
+	fmt.Printf("Public key: \t%s\n", retPubKey)
 }
 
 func init() {
