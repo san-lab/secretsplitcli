@@ -1,5 +1,5 @@
 A simple CLI to generate Shamir Secret Shares of a bn256 BLS private key
-Based on Corba.The fole format is adapted from Ethereum key files.
+Based on Corba.The file format is adapted from Ethereum key files.
 The cryptographic part depends on kyber
 
     Usage:
